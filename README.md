@@ -1,6 +1,52 @@
+# Path Planning Project Report
+Stephen Giardinelli
+
+## Path Planning Approach
+For this project, I followed the general guidelines provided in the Project Q&A.  I found that the general strategies discussed there worked fairly well and just needed some improvements and fine tuning.  The bulk of my time was spent dealing with lane chgane logic.  My entire path planner was implemented using decision trees.  Though more complicated methods were described in the lectures, I found that they were not required in order to solve the problem provided.
+
+## Driving Along A Lane
+I started the project by trying to get the vehicle to drive along a lane.  In order to do this I mostly followed the approach provided in the Project Q&A.  At all times, the vehicle has a target lane and a target velocity.  The path is created by generating a spline which initially starts with two points - the inital point is generated behind the vehicle and second point is the vehcile's position.  This is needed to "point" the spline alone the lane.  The rest of the spline is created with 3 points that are projected 30m, 60m, and 90m along the target lane.  This points are projected using frenet coordinates and then the global cartesian coordinated are provided to spline generator.  One the vehicle is moving and a previous path is returned the the last two "previous path" points are used for the inital two spline points.  The the same three points are project out along the target lane.
+
+I played around a decent amount with the spline poitns.  I tried using upt to 6 spline points with differnet spacing.  I found that the most important point is the first projected point as this will greatly affect how gradually or abruptly you change lanes.  30m seemed to be the sweet spot.  Also, I noticed that adding spline points did not help smooth out the spine, in fact it caused the spline to oscillate too much and sometimes the vehcile would bounce around laterally in the lane.
+
+## Accelerating and Decelerating
+The inital method proiveded in the Q&A did not seem optimal to me.  Instead I developed an approach that controlled the acceleration by setting the changing the gap in between waypoints.  The `target_gap` was calculated by converting the `target_speed` to m/s and then multiplying by 0.02s (20ms) to get the distance needed to move between each frame:
+```c++
+double target_gap = (target_speed / 2.24) * 0.02; 
+```
+Knowing the target distance between waypoints I handled acceration by increasing or decreasing the gap at every waypoint.  The value that I increased or decreased by `delta_gap` was calculated by finding the difference between the `current_gap` and `target_gap` and then normalizing that value and multiplying by a delta value that corresponeded to a maximum accereration of 8.75m/s^2.
+```c++
+double delta_gap = fabs(target_gap - current_gap) / 0.447 * 0.0035;
+```
+0.447 is the maximum difference in gap that we should see - like when the vehicle has a current velocity of 0 but a target velocity of 50mph.  This value normalizes the differnce value between 0 and 1.  This value is then multiplied by maximum `delta_gap` of 0.0035 (8.75m/s^2).  The result is a `delta_gap` that is lineraly proportional to the difference between `current_speed` and `target_speed` and ranges from 0 (0m/s^2) to 0.0035 (8.75m/s^2).
+
+This method gave a very smooth acceleration which greatly helped limit the jerk while driving around the track.  The calculation, however, is not exact becase the gap is only calculated along the direction that the car is travelling and does not take into account the curvature of the car.
+
+## Avoiding Collisions and Changing Lanes
+I won't go through all of the logic for this, but I used the same ideas discussed in the Q&A and expanded on them.  To avoid collision I iterated through all of the snesor fusion data and:
+* Is the vehicle in my `target_lane`?
+* If so, is the vehicle less than 25m in front of me?
+* If so, there could be 2 multiple vehicles in my lane, less than 25m in front of me, is this the closest one?
+* If so, is this vehicle travelling slower than my `target_velocity`?
+* If so, execute left lane change if possible
+* If left lane change is not possible, execute right lane change if possible.
+* If right lane change is not possible, slow down by changing my `target_speed` to the speed of the detected vehicle - 5mph.
+
+I made a separate funciton to evaluate if a lane change is possible `canChangeLanes()`.  This funciton takes arguments for the `target_lane`, the `s_coordinate` at the end of the previous path, and the `sensor_fusion` data passed by reference.  It returns `true` if a lane change is possible and `false` if a lane change is not possible.
+
+The logic of `canChangeLanes()` is very similar to detecting collisions, except it makes sure the target lane is clear for 10m in front of the end of the previous path and 18m behind the end of the previous path.
+
+The tricky part of this part of the code was dealing with edge cases where the either the Ego vehicle or detected vehicles crossed the maximum s value of the track loop while the other did not.  I handled these cases by summing the values and taking the modulus with `fmod()`.
+
+## Summary
+After testing my path planning code numerous times, I have made many successful laps without incident.  I have a feeling there still might be some edge cases where acceleration is exceeded but that can be dealt with by simple lowering the target velocity or the maximum possible `delta_gap`.
+
+The logic for changing lanes could be improved by using a cost funciton to evaluate which would be the most beneficial lane to change into instead of always attempting a left lane change before a right.  Overall I feel that my simple solution works just fine as the times when the Ego vehicle gets stuck behine a car, there is usually a large cluster of cars that even a more complex planning algorithm would not be able to get around.
+
+
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
-   
+
 ### Simulator.
 You can download the Term3 Simulator which contains the Path Planning Project from the [releases tab (https://github.com/udacity/self-driving-car-sim/releases/tag/T3_v1.2).  
 

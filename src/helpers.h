@@ -154,4 +154,61 @@ vector<double> getXY(double s, double d, const vector<double> &maps_s,
   return {x,y};
 }
 
+// Function to check if we can safely make a lane change into the target lane
+//   Args:
+//     target_lane [int] : the lane that we want to move into
+//     car_s [double] : the s coordinate (frenet) or distance along the lane
+//                      at the end of the previous path
+//     sensor_fusion [vector<vector<double>] : sensor fusion data
+//
+//   Return:
+//     bool : true  -> safe to move into target lane
+//            false -> unsafe to move into taget lane
+bool canChangeLanes(          int target_lane,
+                     const double car_s,
+     const vector<vector<double>> &sensor_fusion) {
+  // Maximum s value for simulation track
+  const double max_s = 6945.554;
+  // Iterating through all sensor fusion objects
+  for (int i = 0; i <  sensor_fusion.size(); ++i) {
+    // Getting frenet coordinates of detected vehicle
+    double d = sensor_fusion[i][6];
+    double s = sensor_fusion[i][5];
+
+    // If detected vehicle is in the target lane
+    if (d < (2 + 4 * target_lane + 2) && d > (2 + 4 * target_lane - 2)) {
+      
+      // Edge case - Ego car behind detected car but near end of track
+      // If distance less than 10m it is too close for a lane chane
+      if ((car_s + 15 > max_s && s < 10) && (fmod(car_s + s, max_s) < 10)) {
+        return false;
+      } 
+      // Edge case - Detected car behind ego car but near end of track
+      // If distance less than 18m it is too close for a lane change
+      else if ((s + 10 > max_s && car_s < 18 && fmod(car_s + s, max_s) < 18)) {
+        return false;
+      } 
+      // If Ego car in front of detetected car but less than 18m away,
+      // it is too close for a lane change
+      else if ((car_s > s) && (car_s - s < 18)) {
+        return false;
+      }
+      // If detected car is in front of ego car but less than 10m away,
+      // it is too close for a lane change
+      else if ((s > car_s) && (s - car_s < 10)) {
+        return false;
+      }
+      
+      //if (fabs(car_s - s) < 15.0 || fmod(car_s + s, max_s) < 15.0) {
+      //    return false;
+      //}
+    }
+  }
+
+  // If none of the above cases are true, it is safe to move into the target lane
+  return true;
+}
+
+
+
 #endif  // HELPERS_H
